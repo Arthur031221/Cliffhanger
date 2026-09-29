@@ -172,7 +172,9 @@ These are real blockers. Stop for them:
 - **An ambiguous requirement that changes the design**: the options lead to different
   architectures and the remaining work depends on the choice.
 - **Protected resources**: a branch, file, directory, or environment you are denied, or a tool call
-  the harness refused. Do not route around a denial.
+  the harness refused. Do not disguise a denied command to get it past the check. A denial is not
+  a blocker when an allowed tool does the same job, because the allow list is the user's
+  permission: if `python -m pytest` is refused and `pytest` is allowed, run `pytest`.
 - **Destructive or irreversible actions**: dropping or migrating data in place, force-pushing,
   deleting files outside the task, sending email or messages, deploying to production, spending
   money. These need a yes even when everything else says keep going.

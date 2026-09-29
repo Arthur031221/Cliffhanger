@@ -17,11 +17,11 @@ TOKEN = re.compile(r"\b(?:BLOCKED|NEEDS-YOU):")
 BOX = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s+(.+?)\s*$", re.M)
 F = re.I | re.M
 
-PATTERNS = [  # (rule, description, regex): the four early stops named in Anthropic's Opus 5.5 guide
+PATTERNS = [  # (rule, description, regex): the four early stops in Anthropic's Opus 5.5 guide, plus one
     ("announces-next-step", "a summary that announces the next step instead of taking it", re.compile(
         r"\bnext steps?\s*(?:is|are|would be|will be|:)|\bnext,? I(?:'ll| will| would| plan to)\b"
-        r"|\b(?:then|after that),? I(?:'ll| will)\b|\bwhat(?:'s| is) left\b"
-        r"|\bI(?:'ll| will) (?:now |next )?(?:continue|proceed|move on|start on|tackle|work on)\b"
+        r"|\b(?:then|after that),? I(?:'ll| will)\b|\bwhat(?:'s| is) left\b|\bI(?:'ll| will) (?:now |next |then )?"
+        r"(?:continue|proceed|move on|start on|tackle|work on|run|add|write|finish)\b"
         r"|^\W*(?:remaining|still to do|left to do|todo|next steps?)(?: work| items| steps)?\W*$", F)),
     ("offers-to-continue", "an offer to carry on that waits for an answer nobody will give", re.compile(
         r"\b(?:do you )?want me to\b|\bwould you like me to\b|\bshall I\b"
@@ -29,7 +29,8 @@ PATTERNS = [  # (rule, description, regex): the four early stops named in Anthro
         r"|\blet me know (?:if|whether|when) (?:you(?:'d| would)? (?:like|want) me to|I should|to (?:continue|proceed))"
         r"|\bif you(?:'d| would)? (?:like|want|prefer),? I (?:can|could|will|'ll)\b"
         r"|\bI can (?:continue|proceed|keep going|finish|go ahead)\b[^.?!\n]*\bif\b"
-        r"|\bhappy to (?:continue|proceed|keep going|finish)\b|\bsay the word\b", F)),
+        r"|\bhappy to (?:continue|proceed|keep going|finish)\b|\bsay the word\b"
+        r"|\bonce you (?:approve|confirm|reply|give the go-ahead)\b", F)),
     ("decisions-for-user", "a list of decisions, none of which blocks the rest of the work", re.compile(
         r"\bdecisions? (?:for you|you(?:'ll)? need to make|needed from you)\b"
         r"|\b(?:a few|some|two|three|several|couple of) (?:open )?(?:decisions|questions|choices)\b"
@@ -41,13 +42,15 @@ PATTERNS = [  # (rule, description, regex): the four early stops named in Anthro
         r"|\bnatural (?:stopping|pause|break)|\bI'll (?:pause|stop) (?:here|now|for now)\b"
         r"|\bcheck(?:ing)? in (?:with you|before)\b"
         r"|\bin (?:the |a )?(?:next|follow-up) (?:turn|session|message)\b", F)),
+    ("leaves-work-unverified", "a report that the work was never run or tested", re.compile(  # ours, not the guide's
+        r"\b(?:haven't|have not|couldn't|could not|didn't|did not) (?:yet )?(?:been able to )?(?:run|execute) "
+        r"(?:the |any )?(?:tests?|pytest|test suite|suite)\b|\bunverified\b|\buntested\b|\bnot (?:yet )?tested\b", F)),
 ]
 BLOCKERS = re.compile(
     r"\bneeds? (?:your|you to)\b|\b(?:cannot|can't|unable to) (?:proceed|continue)\b"
     r"|\bcredentials?\b|\bapi[ _-]?key\b|\baccess token\b|\bpermission (?:denied|to)\b"
     r"|\bwhich one of these\b|\b(?:destructive|irreversible)\b|\bcan(?:not|'t) be undone\b"
-    r"|\b(?:requires?|needs?) (?:your )?(?:approval|confirmation|sign-?off)\b"
-    r"|\bis protected\b|\bprotected (?:branch|environment)\b", F)
+    r"|\b(?:requires?|needs?) (?:your )?(?:approval|confirmation|sign-?off)\b|\bprotected (?:branch|environment)\b", F)
 KEYS = ("TaskCreate", "TaskUpdate", "TodoWrite", "tool_result", "turnOrigin", "[ ]", "[x]", "[X]")
 
 
@@ -112,17 +115,14 @@ def decide(payload, items, source, count, max_count):
     """Pure decision function. Returns (action, rule, open_items, matched_text)."""
     msg = payload.get("last_assistant_message") or ""
     open_items = [t for t, s in items if s not in ("completed", "deleted")]
-    early = [("blocker-token", TOKEN.search(msg)), ("background-work", payload.get("background_tasks")),
-             ("plan-mode", payload.get("permission_mode") == "plan"), ("max-continuations", count >= max_count)]
-    for rule, hit in early:  # background work wakes the session on its own when it finishes
+    ordered = [("allow", "blocker-token", TOKEN.search(msg)),
+               ("allow", "background-work", payload.get("background_tasks")),
+               ("allow", "plan-mode", payload.get("permission_mode") == "plan"),
+               ("allow", "max-continuations", count >= max_count), ("block", "open-items", open_items),
+               ("allow", "checklist-done", source), ("allow", "blocker-phrase", BLOCKERS.search(msg))]
+    for action, rule, hit in ordered:  # background work wakes the session itself; a checklist beats regexes
         if hit:
-            return "allow", rule, open_items, None
-    if open_items:
-        return "block", "open-items", open_items, None
-    if source:
-        return "allow", "checklist-done", [], None  # the checklist is the source of truth
-    if BLOCKERS.search(msg):
-        return "allow", "blocker-phrase", [], None
+            return action, rule, open_items, None
     for rule, _, rx in PATTERNS:
         m = rx.search(msg)
         if m:

@@ -285,3 +285,27 @@ def test_task_ids_fall_back_to_result_text():
                                                        "input": {"taskId": "7", "status": "completed"}}]}},
     ]
     assert hook.checklist(records) == ("tasks", [("X", "completed")])
+
+
+def test_waiting_on_approval_it_could_route_around_blocks(run_hook):
+    # Observed in a real Sonnet 5.5 headless run: `python -m pytest` was denied, `pytest` was allowed.
+    msg = ("Both parts are written, but I haven't been able to run pytest yet. The Bash tool is asking for "
+           "approval on the pytest command, so nothing has been tested. Once you approve it, I'll run "
+           "`python -m pytest -q`.")
+    _, out, log = run_hook({"last_assistant_message": msg})
+    assert out["decision"] == "block" and log[-1]["rule"] == "announces-next-step"
+    assert "BLOCKED:" in out["reason"]
+
+
+def test_unverified_work_blocks(run_hook):
+    # Observed in two real Sonnet 5.5 headless runs: `python -m pytest` denied, `pytest` allowed but never tried.
+    msg = ("I made all the code changes, but I couldn't run pytest. The sandbox blocked every attempt to run it "
+           "and asked for approval, which isn't possible in this non-interactive session. So the tests are unverified.")
+    _, out, log = run_hook({"last_assistant_message": msg})
+    assert out["decision"] == "block" and log[-1]["rule"] == "leaves-work-unverified"
+
+
+def test_untested_part_with_real_blocker_allows(run_hook):
+    msg = "All 31 tests pass. The deploy script is untested because it needs AWS credentials I don't have."
+    _, out, log = run_hook({"last_assistant_message": msg})
+    assert out is None and log[-1]["rule"] == "blocker-phrase"
