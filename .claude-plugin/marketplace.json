@@ -1,0 +1,17 @@
+{
+  "name": "cliffhanger",
+  "owner": {
+    "name": "Arthur",
+    "url": "https://github.com/Arthur031221"
+  },
+  "description": "cliffhanger: a Stop hook and skill that stops agents from ending the turn with work still owed.",
+  "plugins": [
+    {
+      "name": "cliffhanger",
+      "source": ".",
+      "description": "Blocks the end of a turn while the agent's checklist has open items or its last message is an early stop.",
+      "category": "productivity",
+      "tags": ["hooks", "stop-hook", "unattended"]
+    }
+  ]
+}

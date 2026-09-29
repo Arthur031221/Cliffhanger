@@ -1,0 +1,14 @@
+{
+  "name": "cliffhanger",
+  "displayName": "cliffhanger",
+  "version": "0.1.0",
+  "description": "Stop hook plus skill that keeps Claude Code working until every part of the task is done or a real blocker is named, and counts every early stop it catches.",
+  "author": {
+    "name": "Arthur",
+    "url": "https://github.com/Arthur031221"
+  },
+  "homepage": "https://github.com/Arthur031221/cliffhanger",
+  "repository": "https://github.com/Arthur031221/cliffhanger",
+  "license": "MIT",
+  "keywords": ["stop-hook", "hooks", "skill", "unattended", "agents", "early-stop"]
+}
