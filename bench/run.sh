@@ -36,7 +36,7 @@ for arm in baseline treatment; do
   sed "s#__HOOK__#$ROOT/hooks/cliffhanger.py#" "$BENCH/settings.$arm.json" > "$OUT/settings.$arm.json"
 done
 awk 'BEGIN{n=0} /^---$/{n++; next} n>=2' "$ROOT/SKILL.md" > "$OUT/skill-body.md"
-{ echo "model=$MODEL nudges=$NUDGES tools=$TOOLS"; claude --version; date; } > "$OUT/meta.txt"
+{ echo "model=$MODEL nudges=$NUDGES tools=$TOOLS"; claude --version; date +%Y-%m-%dT%H:%M:%S%z; } > "$OUT/meta.txt"
 
 run_arm() {  # run_arm <arm> <task_id> <prompt>
   local arm="$1" task="$2" prompt="$3" dir="$OUT/$1/$2"

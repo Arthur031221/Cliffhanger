@@ -22,6 +22,7 @@ LABELS = {
     "offers-to-continue": "offered to continue",
     "decisions-for-user": "listed decisions that blocked nothing",
     "good-place-to-report": "stopped at a 'good place to report'",
+    "leaves-work-unverified": "ended with the work untested",
     "blocker-token": "BLOCKED: or NEEDS-YOU: named",
     "blocker-phrase": "blocker described in prose",
     "checklist-done": "checklist complete",
@@ -115,7 +116,8 @@ def cmd_stats(args):
         for rule, n in data["observed_by_rule"].items():
             lines.append(f"  {n:>4}  {LABELS.get(rule, rule)}")
     allowed = sum(data["allowed_by_rule"].values())
-    lines.append(f"allowed {allowed} stops")
+    if allowed:
+        lines.append(f"allowed {allowed} stop{'s' if allowed != 1 else ''}")
     for rule, n in data["allowed_by_rule"].items():
         lines.append(f"  {n:>4}  {LABELS.get(rule, rule)}")
     if data["cap_reached"]:

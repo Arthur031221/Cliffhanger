@@ -117,7 +117,7 @@ def decide(payload, items, source, count, max_count):
                ("allow", "plan-mode", payload.get("permission_mode") == "plan"),
                ("allow", "max-continuations", count >= max_count), ("block", "open-items", open_items),
                ("allow", "checklist-done", source), ("allow", "blocker-phrase", BLOCKERS.search(msg))]
-    for action, rule, hit in ordered:  # background work wakes the session itself; a checklist beats regexes
+    for action, rule, hit in ordered:  # background work wakes the session itself. A checklist beats regexes
         if hit:
             return action, rule, open_items, None
     for rule, _, rx in PATTERNS:
