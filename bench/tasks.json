@@ -1,0 +1,150 @@
+[
+  {
+    "id": "t01-health",
+    "prompt": "Add a GET /health endpoint to shelf/api.py that returns {\"status\": \"ok\", \"version\": <shelf.__version__>}. Add a test for it in tests/test_api.py. Document it in docs/api.md under Endpoints. Add a line for it under ## Unreleased in CHANGELOG.md. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "/health"},
+      {"kind": "tests_contain", "pattern": "/health"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "/health"},
+      {"kind": "changelog", "pattern": "health"},
+      {"kind": "pytest", "min_tests": 8}
+    ]
+  },
+  {
+    "id": "t02-isbn",
+    "prompt": "Add an optional isbn field (a string, default None) to Book in shelf/models.py. POST /books accepts it and must return 400 with {\"error\": \"...\"} when an isbn is given but is not exactly 10 or 13 digits. Add tests for a valid isbn, an invalid isbn, and a book without one. Document the field and the 400 response in docs/api.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/models.py", "pattern": "isbn"},
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "400"},
+      {"kind": "tests_contain", "pattern": "isbn"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "isbn"},
+      {"kind": "changelog", "pattern": "isbn"},
+      {"kind": "pytest", "min_tests": 10}
+    ]
+  },
+  {
+    "id": "t03-pagination",
+    "prompt": "Make GET /books accept limit and offset query parameters, defaults 20 and 0. A limit above 100 or below 1, or a negative offset, returns 400 with an error JSON. Add tests for the defaults, for fetching a page, and for each invalid case. Document both parameters in docs/api.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "offset"},
+      {"kind": "tests_contain", "pattern": "offset"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "limit"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "offset"},
+      {"kind": "changelog", "pattern": "limit|offset|paginat"},
+      {"kind": "pytest", "min_tests": 10}
+    ]
+  },
+  {
+    "id": "t04-patch",
+    "prompt": "Add Store.update(book_id, **fields) to shelf/store.py and a PATCH /books/<id> route that updates any of title, author, year from a JSON body and returns the updated book. Unknown fields return 400 and a missing book returns 404. Add tests for the store method and for the route (success, unknown field, missing book). Document PATCH in docs/api.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/store.py", "pattern": "def update"},
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "PATCH"},
+      {"kind": "tests_contain", "pattern": "PATCH"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "PATCH"},
+      {"kind": "changelog", "pattern": "PATCH|update"},
+      {"kind": "pytest", "min_tests": 11}
+    ]
+  },
+  {
+    "id": "t05-stats-cli",
+    "prompt": "Add Store.count_by_author() returning a dict of author to number of books, and a `shelf stats` CLI subcommand that prints one line per author as `<author>\\t<count>`, sorted by count descending, then by author name. Add tests for both. Add a usage example for `shelf stats` to the CLI usage section of README.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/store.py", "pattern": "def count_by_author"},
+      {"kind": "contains", "file": "shelf/cli.py", "pattern": "stats"},
+      {"kind": "tests_contain", "pattern": "count_by_author"},
+      {"kind": "contains", "file": "README.md", "pattern": "shelf stats"},
+      {"kind": "changelog", "pattern": "stats"},
+      {"kind": "pytest", "min_tests": 9}
+    ]
+  },
+  {
+    "id": "t06-rename-year",
+    "prompt": "Rename the Book field `year` to `published_year` everywhere: the model, the store, the API JSON (POST body and responses), the CLI, the tests, and docs/api.md. Add a changelog line under ## Unreleased that calls out the breaking change. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/models.py", "pattern": "published_year"},
+      {"kind": "absent", "file": "shelf/models.py", "pattern": "^\\s+year\\s*:"},
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "published_year"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "published_year"},
+      {"kind": "absent", "file": "docs/api.md", "pattern": "\"year\""},
+      {"kind": "tests_contain", "pattern": "published_year"},
+      {"kind": "changelog", "pattern": "published_year"},
+      {"kind": "pytest", "min_tests": 7}
+    ]
+  },
+  {
+    "id": "t07-search",
+    "prompt": "Add Store.search(query) that does a case-insensitive substring match on title and author, and make GET /books?q=<text> filter with it. Add tests for the store method and for the q parameter. Document q in docs/api.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/store.py", "pattern": "def search"},
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "search"},
+      {"kind": "tests_contain", "pattern": "search"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "\\bq\\b"},
+      {"kind": "changelog", "pattern": "search"},
+      {"kind": "pytest", "min_tests": 9}
+    ]
+  },
+  {
+    "id": "t08-persistence",
+    "prompt": "Add Store.save(path) and a Store.load(path) classmethod that write and read all books as JSON, preserving ids so new books continue after the highest id. Add a --db PATH option to the CLI that loads the store from PATH when the file exists and saves it after `add`. Add tests that use tmp_path for the store round trip and for the CLI option. Document --db in README.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/store.py", "pattern": "def save"},
+      {"kind": "contains", "file": "shelf/store.py", "pattern": "def load"},
+      {"kind": "contains", "file": "shelf/cli.py", "pattern": "--db"},
+      {"kind": "tests_contain", "pattern": "tmp_path"},
+      {"kind": "contains", "file": "README.md", "pattern": "--db"},
+      {"kind": "changelog", "pattern": "save|load|persist|--db"},
+      {"kind": "pytest", "min_tests": 9}
+    ]
+  },
+  {
+    "id": "t09-validation",
+    "prompt": "Validate POST /books: title and author must be non-empty strings and year must be an integer between 1450 and 2100. Invalid or missing input returns 400 with {\"error\": \"<which field and why>\"} instead of raising. Add a test for each field. Add an Errors section to docs/api.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "400"},
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "1450"},
+      {"kind": "tests_contain", "pattern": "400"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "^#+\\s*Errors"},
+      {"kind": "changelog", "pattern": "validat|400"},
+      {"kind": "pytest", "min_tests": 10}
+    ]
+  },
+  {
+    "id": "t10-tags",
+    "prompt": "Add Store.by_tag(tag), make GET /books?tag=<name> return only books with that tag, and give the CLI `list` command a --tag option. Add tests for the store method, the API parameter, and the CLI option. Document the tag parameter in docs/api.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/store.py", "pattern": "def by_tag"},
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "tag"},
+      {"kind": "contains", "file": "shelf/cli.py", "pattern": "--tag"},
+      {"kind": "tests_contain", "pattern": "--tag"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "\\btag\\b"},
+      {"kind": "changelog", "pattern": "tag"},
+      {"kind": "pytest", "min_tests": 10}
+    ]
+  },
+  {
+    "id": "t11-error-helper",
+    "prompt": "Make DELETE /books/<id> return 204 with an empty body instead of 200. Add an error_response(start_response, status, message) helper in shelf/api.py and use it for every error response in that file. Update the tests, including one that checks DELETE returns 204, update docs/api.md, and add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "def error_response"},
+      {"kind": "contains", "file": "shelf/api.py", "pattern": "204"},
+      {"kind": "absent", "file": "shelf/api.py", "pattern": "_json\\(start_response, \"404"},
+      {"kind": "tests_contain", "pattern": "204"},
+      {"kind": "contains", "file": "docs/api.md", "pattern": "204"},
+      {"kind": "changelog", "pattern": "204|error_response"},
+      {"kind": "pytest", "min_tests": 8}
+    ]
+  },
+  {
+    "id": "t12-export",
+    "prompt": "Add `shelf export --format csv|json` that prints all books to stdout: csv with a header row id,title,author,year,tags where tags are joined with ';', and json as a list of objects. Add tests for both formats. Add a usage example to README.md. Add a changelog line under ## Unreleased. Run pytest and make sure the whole suite passes.",
+    "checks": [
+      {"kind": "contains", "file": "shelf/cli.py", "pattern": "export"},
+      {"kind": "tests_contain", "pattern": "csv"},
+      {"kind": "tests_contain", "pattern": "export"},
+      {"kind": "contains", "file": "README.md", "pattern": "shelf export"},
+      {"kind": "changelog", "pattern": "export"},
+      {"kind": "pytest", "min_tests": 9}
+    ]
+  }
+]

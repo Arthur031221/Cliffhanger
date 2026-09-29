@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CLIFFHANGER_OBSERVE=1 python3 \"__HOOK__\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
