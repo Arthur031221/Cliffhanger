@@ -1,0 +1,24 @@
+[project]
+name = "cliffhanger"
+version = "0.1.0"
+description = "Stop hook and skill that keeps coding agents working until the task is done or a real blocker is named."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+authors = [{ name = "Arthur" }]
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "ruff==0.14.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+include = ["*.py", "bin/cliffhanger"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "I"]
