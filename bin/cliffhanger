@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""cliffhanger: see and control the Stop hook that keeps agents from ending the turn early."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import sys
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+VERSION = "0.1.0"
+ROOT = Path(__file__).resolve().parent.parent
+HOOK = ROOT / "hooks" / "cliffhanger.py"
+EVENTS = ("Stop", "SubagentStop")
+MARKER = "cliffhanger.py"
+LABELS = {
+    "open-items": "open checklist items",
+    "announces-next-step": "announced the next step instead of taking it",
+    "offers-to-continue": "offered to continue",
+    "decisions-for-user": "listed decisions that blocked nothing",
+    "good-place-to-report": "stopped at a 'good place to report'",
+    "blocker-token": "BLOCKED: or NEEDS-YOU: named",
+    "blocker-phrase": "blocker described in prose",
+    "checklist-done": "checklist complete",
+    "no-pattern": "no open items, no early-stop pattern",
+    "max-continuations": "continuation cap reached",
+    "background-work": "background work still running",
+    "plan-mode": "plan mode",
+}
+
+
+EPILOG = """install and uninstall back up settings.json first and never touch other hooks.
+
+environment (read by the hook):
+  CLIFFHANGER_OBSERVE=1   log what would be blocked, never block
+  CLIFFHANGER_MAX=3       automatic continuations allowed per user turn
+  CLIFFHANGER_DISABLE=1   skip the hook for this process tree
+  CLIFFHANGER_HOME        state and log directory (default ~/.cliffhanger)"""
+
+
+def home() -> Path:
+    return Path(os.environ.get("CLIFFHANGER_HOME") or Path.home() / ".cliffhanger")
+
+
+def default_settings() -> Path:
+    config = os.environ.get("CLAUDE_CONFIG_DIR")
+    return (Path(config) if config else Path.home() / ".claude") / "settings.json"
+
+
+def emit(args, data, text):
+    print(json.dumps(data, indent=2) if args.json else text)
+
+
+def fail(msg, code=1):
+    print(f"cliffhanger: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+# ---------- stats ----------
+
+def read_log(since):
+    path = home() / "log.jsonl"
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            row = json.loads(line)
+            ts = datetime.fromisoformat(row["ts"])
+        except (ValueError, KeyError, TypeError):
+            continue
+        if ts >= since:
+            rows.append(row)
+    return rows
+
+
+def summarize(rows):
+    caught = [r for r in rows if r.get("action") == "block" and not r.get("observe")]
+    observed = [r for r in rows if r.get("action") == "block" and r.get("observe")]
+    allowed = [r for r in rows if r.get("action") == "allow"]
+    return {
+        "stops_seen": len(rows),
+        "caught": len(caught),
+        "would_have_caught": len(observed),
+        "sessions_with_catches": len({r.get("session") for r in caught}),
+        "sessions": len({r.get("session") for r in rows}),
+        "caught_by_rule": dict(Counter(r["rule"] for r in caught).most_common()),
+        "observed_by_rule": dict(Counter(r["rule"] for r in observed).most_common()),
+        "allowed_by_rule": dict(Counter(r["rule"] for r in allowed).most_common()),
+        "cap_reached": sum(1 for r in allowed if r.get("rule") == "max-continuations"),
+    }
+
+
+def period_name(days):
+    return {1: "today", 7: "this week", 30: "this month"}.get(days, f"in the last {days} days")
+
+
+def cmd_stats(args):
+    since = datetime.now(timezone.utc) - timedelta(days=args.days)
+    rows = read_log(since)
+    data = {"days": args.days, "log": str(home() / "log.jsonl"), **summarize(rows)}
+    if not rows:
+        return emit(args, data, f"No stops logged {period_name(args.days)}. "
+                                f"The hook writes to {home() / 'log.jsonl'} once it runs.")
+    word = "stop" if data["caught"] == 1 else "stops"
+    lines = [f"caught {data['caught']} early {word} {period_name(args.days)} "
+             f"in {data['sessions_with_catches']} of {data['sessions']} sessions"]
+    for rule, n in data["caught_by_rule"].items():
+        lines.append(f"  {n:>4}  {LABELS.get(rule, rule)}")
+    if data["would_have_caught"]:
+        lines.append(f"observe mode: would have caught {data['would_have_caught']}")
+        for rule, n in data["observed_by_rule"].items():
+            lines.append(f"  {n:>4}  {LABELS.get(rule, rule)}")
+    allowed = sum(data["allowed_by_rule"].values())
+    lines.append(f"allowed {allowed} stops")
+    for rule, n in data["allowed_by_rule"].items():
+        lines.append(f"  {n:>4}  {LABELS.get(rule, rule)}")
+    if data["cap_reached"]:
+        lines.append(f"{data['cap_reached']} turns hit the continuation cap: read those sessions, they were stuck")
+    emit(args, data, "\n".join(lines))
+
+
+# ---------- on / off / status ----------
+
+def cmd_toggle(args):
+    flag = home() / "off"
+    if args.command == "off":
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.write_text("paused by `cliffhanger off`\n")
+    elif flag.exists():
+        flag.unlink()
+    state = "off" if flag.exists() else "on"
+    msg = ("cliffhanger is off. Stops pass through and nothing is logged. `cliffhanger on` resumes."
+           if state == "off" else "cliffhanger is on.")
+    emit(args, {"state": state}, msg)
+
+
+def hook_entries(settings):
+    found = []
+    hooks = settings.get("hooks")
+    for event in EVENTS:
+        groups = hooks.get(event) if isinstance(hooks, dict) else None
+        for group in groups if isinstance(groups, list) else []:
+            handlers = group.get("hooks") if isinstance(group, dict) else None
+            for handler in handlers if isinstance(handlers, list) else []:
+                if MARKER in json.dumps(handler):
+                    found.append((event, handler))
+    return found
+
+
+def load_settings(path: Path):
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    except ValueError as exc:
+        fail(f"{path} is not valid JSON ({exc}). Fix it first, nothing was changed.")
+    if not isinstance(data, dict):
+        fail(f"{path} does not contain a JSON object. Nothing was changed.")
+    return data
+
+
+def cmd_status(args):
+    path = Path(args.settings).expanduser()
+    entries = hook_entries(load_settings(path))
+    rows = read_log(datetime.now(timezone.utc) - timedelta(days=7))
+    data = {
+        "enabled": not (home() / "off").exists() and os.environ.get("CLIFFHANGER_DISABLE") != "1",
+        "settings": str(path),
+        "installed_in_settings": sorted({e for e, _ in entries}),
+        "observe": os.environ.get("CLIFFHANGER_OBSERVE") == "1",
+        "max_continuations": int(os.environ.get("CLIFFHANGER_MAX", "3")),
+        "log": str(home() / "log.jsonl"),
+        "stops_last_7_days": len(rows),
+    }
+    where = ", ".join(data["installed_in_settings"]) or "not installed (the plugin may still provide it)"
+    text = "\n".join([
+        f"state      {'on' if data['enabled'] else 'off'}",
+        f"settings   {path}: {where}",
+        f"mode       {'observe (logs, never blocks)' if data['observe'] else 'blocking'}",
+        f"cap        {data['max_continuations']} continuations per user turn",
+        f"log        {data['log']} ({data['stops_last_7_days']} stops in 7 days)",
+    ])
+    emit(args, data, text)
+
+
+# ---------- install / uninstall ----------
+
+def write_settings(path: Path, data, dry_run):
+    target = Path(os.path.realpath(path))  # keep a symlinked settings.json (dotfiles) a symlink
+    backup = None
+    if dry_run:
+        return backup
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup = target.with_name(f"{target.name}.cliffhanger-backup-{stamp}")
+        shutil.copy2(target, backup)
+    tmp = target.with_name(f".{target.name}.cliffhanger-tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, target)
+    return backup
+
+
+def cmd_install(args):
+    if not HOOK.exists():
+        fail(f"hook script not found at {HOOK}. Run this from a full clone of the repository.")
+    path = Path(args.settings).expanduser()
+    settings = load_settings(path)
+    hooks = settings.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        fail(f'"hooks" in {path} is not an object. Nothing was changed.')
+    existing = {e for e, _ in hook_entries(settings)}
+    events = [e for e in (("Stop",) if args.no_subagent else EVENTS) if e not in existing]
+    for event in events:
+        groups = hooks.setdefault(event, [])
+        if not isinstance(groups, list):
+            fail(f'"hooks.{event}" in {path} is not a list. Nothing was changed.')
+        groups.append({"hooks": [{"type": "command", "command": f'python3 "{HOOK}"', "timeout": 10}]})
+    if not events:
+        return emit(args, {"changed": False, "settings": str(path)}, f"Already installed in {path}.")
+    backup = write_settings(path, settings, args.dry_run)
+    data = {"changed": not args.dry_run, "settings": str(path), "events": events,
+            "backup": str(backup) if backup else None, "hook": str(HOOK)}
+    lines = [f"{'Would add' if args.dry_run else 'Added'} {', '.join(events)} hook to {path}"]
+    if backup:
+        lines.append(f"Backup: {backup}")
+    if (settings.get("enabledPlugins") or {}).get("cliffhanger@cliffhanger"):
+        lines.append("Note: the cliffhanger plugin is also enabled. The hook dedupes, but one install is enough.")
+    lines.append("New sessions pick it up. Check with: cliffhanger status")
+    emit(args, data, "\n".join(lines))
+
+
+def cmd_uninstall(args):
+    path = Path(args.settings).expanduser()
+    settings = load_settings(path)
+    hooks = settings.get("hooks")
+    removed = 0
+    for event in EVENTS:
+        groups = hooks.get(event) if isinstance(hooks, dict) else None
+        if not isinstance(groups, list):
+            continue
+        before, new_groups = removed, []
+        for group in groups:
+            handlers = group.get("hooks") if isinstance(group, dict) else None
+            kept = [h for h in handlers if MARKER not in json.dumps(h)] if isinstance(handlers, list) else None
+            if kept is None or len(kept) == len(handlers):
+                new_groups.append(group)  # not ours: leave it exactly as it was
+                continue
+            removed += len(handlers) - len(kept)
+            if kept:
+                new_groups.append({**group, "hooks": kept})
+        if removed > before:
+            if new_groups:
+                hooks[event] = new_groups
+            else:
+                del hooks[event]
+    if not removed:
+        return emit(args, {"changed": False, "settings": str(path)}, f"No cliffhanger hook found in {path}.")
+    if not hooks:
+        del settings["hooks"]
+    backup = write_settings(path, settings, args.dry_run)
+    data = {"changed": not args.dry_run, "removed": removed, "settings": str(path),
+            "backup": str(backup) if backup else None}
+    lines = [f"{'Would remove' if args.dry_run else 'Removed'} {removed} cliffhanger hook(s) from {path}"]
+    if backup:
+        lines.append(f"Backup: {backup}")
+    emit(args, data, "\n".join(lines))
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="cliffhanger", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter, epilog=EPILOG)
+    parser.add_argument("--version", action="version", version=f"cliffhanger {VERSION}")
+    sub = parser.add_subparsers(dest="command", metavar="command")
+
+    def add(name, help_text, func):
+        p = sub.add_parser(name, help=help_text, description=help_text)
+        p.add_argument("--json", action="store_true", help="print machine-readable JSON")
+        p.set_defaults(func=func)
+        return p
+
+    p = add("stats", "count the early stops the hook caught", cmd_stats)
+    p.add_argument("--days", type=int, default=7, help="window in days (default 7)")
+    add("on", "resume blocking early stops", cmd_toggle)
+    add("off", "pause cliffhanger everywhere until `cliffhanger on`", cmd_toggle)
+    for name, text, func in (("status", "show install state, mode, and log location", cmd_status),
+                             ("install", "add the Stop and SubagentStop hooks to settings.json", cmd_install),
+                             ("uninstall", "remove the cliffhanger hooks from settings.json", cmd_uninstall)):
+        p = add(name, text, func)
+        p.add_argument("--settings", default=str(default_settings()),
+                       help="settings file to edit (default ~/.claude/settings.json)")
+        if name != "status":
+            p.add_argument("--dry-run", action="store_true", help="show the change without writing")
+        if name == "install":
+            p.add_argument("--no-subagent", action="store_true", help="install the Stop hook only")
+    args = parser.parse_args(argv)
+    if not getattr(args, "func", None):
+        parser.print_help()
+        return 0
+    if getattr(args, "days", 1) < 1:
+        fail("--days must be 1 or more", 2)
+    args.func(args)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
