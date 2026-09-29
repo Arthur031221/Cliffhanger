@@ -19,6 +19,7 @@ addopts = "-q"
 line-length = 120
 target-version = "py38"
 include = ["*.py", "bin/cliffhanger"]
+extend-exclude = ["bench/fixture"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "B", "UP", "I"]

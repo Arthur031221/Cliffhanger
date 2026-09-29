@@ -24,23 +24,20 @@ PATTERNS = [  # (rule, description, regex): the four early stops in Anthropic's 
         r"(?:continue|proceed|move on|start on|tackle|work on|run|add|write|finish)\b"
         r"|^\W*(?:remaining|still to do|left to do|todo|next steps?)(?: work| items| steps)?\W*$", F)),
     ("offers-to-continue", "an offer to carry on that waits for an answer nobody will give", re.compile(
-        r"\b(?:do you )?want me to\b|\bwould you like me to\b|\bshall I\b"
-        r"|\bshould I (?:continue|proceed|go ahead|keep going|move on|start)\b"
+        r"\b(?:do you )?want me to\b|\bwould you like me to\b|\bshall I\b|\bsay the word\b"
+        r"|\bshould I (?:continue|proceed|go ahead|keep going)\b|\bonce you (?:approve|confirm|reply)\b"
         r"|\blet me know (?:if|whether|when) (?:you(?:'d| would)? (?:like|want) me to|I should|to (?:continue|proceed))"
-        r"|\bif you(?:'d| would)? (?:like|want|prefer),? I (?:can|could|will|'ll)\b"
-        r"|\bI can (?:continue|proceed|keep going|finish|go ahead)\b[^.?!\n]*\bif\b"
-        r"|\bhappy to (?:continue|proceed|keep going|finish)\b|\bsay the word\b"
-        r"|\bonce you (?:approve|confirm|reply|give the go-ahead)\b", F)),
+        r"|\bif you(?:'d| would)? (?:like|want|prefer),? I (?:can|could|will|'ll)\b|\bhappy to (?:continue|proceed)\b"
+        r"|\bI can (?:continue|proceed|keep going|finish|go ahead)\b[^.?!\n]*\bif\b", F)),
     ("decisions-for-user", "a list of decisions, none of which blocks the rest of the work", re.compile(
-        r"\bdecisions? (?:for you|you(?:'ll)? need to make|needed from you)\b"
+        r"\bdecisions? (?:for you|you(?:'ll)? need to make|needed from you)\b|\bbefore I (?:continue|proceed)\b"
         r"|\b(?:a few|some|two|three|several|couple of) (?:open )?(?:decisions|questions|choices)\b"
         r"|^\W*options?\W*:?\W*$|\bwhich (?:option|approach) (?:do you|would you|should I)\b"
-        r"|\bhow would you like (?:me )?to (?:proceed|handle)\b|\bbefore I (?:continue|proceed|go further)\b", F)),
+        r"|\bhow would you like (?:me )?to (?:proceed|handle)\b", F)),
     ("good-place-to-report", "a stop to report because a milestone felt like a good place", re.compile(
-        r"\bgood (?:stopping|breaking|pausing) (?:point|place)\b"
+        r"\bgood (?:stopping|breaking|pausing) (?:point|place)\b|\bnatural (?:stopping|pause|break)"
         r"|\b(?:good|natural|logical) (?:place|point|time) to (?:stop|pause|check in|report)\b"
-        r"|\bnatural (?:stopping|pause|break)|\bI'll (?:pause|stop) (?:here|now|for now)\b"
-        r"|\bcheck(?:ing)? in (?:with you|before)\b"
+        r"|\bI'll (?:pause|stop) (?:here|now|for now)\b|\bcheck(?:ing)? in (?:with you|before)\b"
         r"|\bin (?:the |a )?(?:next|follow-up) (?:turn|session|message)\b", F)),
     ("leaves-work-unverified", "a report that the work was never run or tested", re.compile(  # ours, not the guide's
         r"\b(?:haven't|have not|couldn't|could not|didn't|did not) (?:yet )?(?:been able to )?(?:run|execute) "
@@ -48,10 +45,10 @@ PATTERNS = [  # (rule, description, regex): the four early stops in Anthropic's 
 ]
 BLOCKERS = re.compile(
     r"\bneeds? (?:your|you to)\b|\b(?:cannot|can't|unable to) (?:proceed|continue)\b"
-    r"|\bcredentials?\b|\bapi[ _-]?key\b|\baccess token\b|\bpermission (?:denied|to)\b"
-    r"|\bwhich one of these\b|\b(?:destructive|irreversible)\b|\bcan(?:not|'t) be undone\b"
-    r"|\b(?:requires?|needs?) (?:your )?(?:approval|confirmation|sign-?off)\b|\bprotected (?:branch|environment)\b", F)
-KEYS = ("TaskCreate", "TaskUpdate", "TodoWrite", "tool_result", "turnOrigin", "[ ]", "[x]", "[X]")
+    r"|\bcredentials?\b|\bapi[ _-]?key\b|\baccess token\b|\bpermission (?:denied|to)\b|\bcan(?:not|'t) be undone\b"
+    r"|\bwhich one of these\b|\b(?:destructive|irreversible)\b|\bprotected (?:branch|environment)\b"
+    r"|\b(?:requires?|needs?) (?:your )?(?:approval|confirmation|sign-?off)\b", F)
+KEYS = ("TaskCreate", "TaskUpdate", "TodoWrite", "Task #", "turnOrigin", "[ ]", "[x]", "[X]")
 
 
 def read_transcript(path, last_msg, wait_ms):
@@ -66,15 +63,15 @@ def read_transcript(path, last_msg, wait_ms):
         if tail in raw[-400_000:] or time.monotonic() >= deadline:
             break
         time.sleep(0.1)
-    records = [parse(ln) for ln in raw.splitlines() if any(k in ln for k in KEYS)]
+    spans = set()  # jump to lines that mention a key: str.find beats splitting a 10+ MB transcript
+    for key in KEYS:
+        i = raw.find(key)
+        while i != -1:
+            end = raw.find("\n", i) % (len(raw) + 1)  # no newline: -1 wraps to len(raw)
+            spans.add((raw.rfind("\n", 0, i) + 1, end))
+            i = raw.find(key, end)
+    records = [json.loads(raw[a:b]) for a, b in sorted(spans) if raw[a:b].rstrip().endswith("}")]
     return [r for r in records if isinstance(r, dict) and not r.get("isSidechain")]
-
-
-def parse(line):
-    try:
-        return json.loads(line)
-    except ValueError:
-        return None
 
 
 def markdown_items(text):
@@ -143,8 +140,7 @@ def reason(rule, open_items, matched):
             "the way, write BLOCKED: <what> <what you need> on its own line.")
 
 
-def first_copy(state_dir, digest):
-    """The plugin and a settings.json install can both fire. Only the first copy decides."""
+def first_copy(state_dir, digest):  # the plugin and a settings.json install can both fire: first copy decides
     lock, now = state_dir / f"{digest}.lock", time.time()
     try:
         os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))

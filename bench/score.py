@@ -89,6 +89,29 @@ def transcript_tokens(session_id):
     return totals
 
 
+def verified_before_first_stop(session_id, first_stop_ts):
+    """True when the agent itself ran pytest green before its first Stop event."""
+    paths = list((Path.home() / ".claude" / "projects").glob(f"*/{session_id}.jsonl")) if session_id else []
+    if not paths:
+        return None
+    pending, green = set(), False
+    for line in paths[0].read_text(errors="replace").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if first_stop_ts and (rec.get("timestamp") or "")[:19] > first_stop_ts[:19]:
+            break
+        content = (rec.get("message") or {}).get("content") if isinstance(rec.get("message"), dict) else None
+        for b in content if isinstance(content, list) else []:
+            if b.get("type") == "tool_use" and b.get("name") == "Bash" and "pytest" in str(b.get("input")):
+                pending.add(b.get("id"))
+            elif b.get("type") == "tool_result" and b.get("tool_use_id") in pending and not b.get("is_error"):
+                text = json.dumps(b.get("content"))
+                green = green or (" passed" in text and " failed" not in text and " error" not in text)
+    return green
+
+
 def load_run(run_dir: Path):
     invs = []
     for path in sorted(run_dir.glob("inv*.json"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0)):
@@ -98,7 +121,10 @@ def load_run(run_dir: Path):
             invs.append({"is_error": True, "result": f"unparseable output in {path.name}"})
     scores = []
     for path in sorted(run_dir.glob("score*.json"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0)):
-        scores.append(json.loads(path.read_text()))
+        try:
+            scores.append(json.loads(path.read_text()))
+        except ValueError:
+            continue  # a run still in progress
     log = run_dir / "home" / "log.jsonl"
     hook = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
     return invs, scores, hook
@@ -108,7 +134,8 @@ def summarize(out: Path):
     rows, agg = [], {}
     for arm in ("baseline", "treatment"):
         agg[arm] = {"tasks": 0, "done_first": 0, "done_final": 0, "owed_at_first_stop": 0, "nudges": 0,
-                    "cost": 0.0, "output_tokens": 0, "turns": 0, "hook_block": 0, "errors": 0}
+                    "cost": 0.0, "output_tokens": 0, "turns": 0, "hook_block": 0, "errors": 0,
+                    "verified_first": 0}
         for task_id in TASKS:
             run_dir = out / arm / task_id
             if not run_dir.exists():
@@ -134,27 +161,32 @@ def summarize(out: Path):
             a["hook_block"] += blocks
             a["errors"] += sum(1 for i in invs if i.get("is_error"))
             first_hook = [h for h in hook if h.get("session") == sid]
+            verified = verified_before_first_stop(sid, first_hook[0]["ts"] if first_hook else None)
+            a["verified_first"] += bool(verified)
             rows.append({
                 "arm": arm, "task": task_id, "session": sid,
                 "first": f"{scores[0]['passed']}/{scores[0]['total']}" if scores else "n/a",
                 "final": f"{scores[-1]['passed']}/{scores[-1]['total']}" if scores else "n/a",
                 "nudges": len(invs) - 1, "turns": sum(i.get("num_turns") or 0 for i in invs),
+                "verified_first": verified,
                 "cost": round(cost, 4), "out_tokens": tokens.get("output", 0), "hook": ", ".join(
                     f"{h['action']}:{h['rule']}" for h in first_hook) or "none",
                 "errors": [i.get("result", "")[:160] for i in invs if i.get("is_error")],
                 "first_result": (invs[0].get("result") or "")[-300:].replace("\n", " "),
             })
     (out / "summary.json").write_text(json.dumps({"aggregate": agg, "rows": rows}, indent=2))
-    lines = ["| arm | task | checks after 1st stop | final | nudges | turns | cost USD | output tokens | hook decisions |",
-             "|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| arm | task | checks after 1st stop | agent ran suite green before 1st stop | final | nudges | turns "
+             "| cost USD | output tokens | hook decisions |", "|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
-        lines.append(f"| {r['arm']} | {r['task']} | {r['first']} | {r['final']} | {r['nudges']} | {r['turns']} | "
-                     f"{r['cost']:.4f} | {r['out_tokens']} | {r['hook']} |")
-    lines += ["", "| arm | tasks run | done at first stop | work owed at first stop | done after nudges | "
-                  "nudges | hook blocks | total cost USD | output tokens | errors |", "|---|---|---|---|---|---|---|---|---|---|"]
+        lines.append(f"| {r['arm']} | {r['task']} | {r['first']} | {r['verified_first']} | {r['final']} | "
+                     f"{r['nudges']} | {r['turns']} | {r['cost']:.4f} | {r['out_tokens']} | {r['hook']} |")
+    lines += ["", "| arm | tasks run | done at first stop | work owed at first stop | ran suite green before 1st stop "
+                  "| done after nudges | nudges | hook blocks | total cost USD | output tokens | errors |",
+              "|---|---|---|---|---|---|---|---|---|---|---|"]
     for arm, a in agg.items():
-        lines.append(f"| {arm} | {a['tasks']} | {a['done_first']} | {a['owed_at_first_stop']} | {a['done_final']} | "
-                     f"{a['nudges']} | {a['hook_block']} | {a['cost']:.2f} | {a['output_tokens']} | {a['errors']} |")
+        lines.append(f"| {arm} | {a['tasks']} | {a['done_first']} | {a['owed_at_first_stop']} | "
+                     f"{a['verified_first']} | {a['done_final']} | {a['nudges']} | {a['hook_block']} | "
+                     f"{a['cost']:.2f} | {a['output_tokens']} | {a['errors']} |")
     (out / "summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 

@@ -6,7 +6,11 @@
 #   bench/run.sh t01-health ...  selected tasks
 #
 # Environment: MODEL (default claude-sonnet-5-5), NUDGES (default 3), DEADLINE_MIN (default 40,
-# no new task starts after it), OUT (default bench/out/<timestamp>).
+# no new task starts after it), OUT (default ~/.cache/cliffhanger-bench/<timestamp>), TOOLS (the
+# --allowedTools list for both arms).
+#
+# OUT must be outside this repository. Claude Code loads AGENTS.md and CLAUDE.md from parent
+# directories, so a run directory inside the repo would hand the baseline arm the skill text.
 set -euo pipefail
 
 BENCH="$(cd "$(dirname "$0")" && pwd)"
@@ -14,8 +18,12 @@ ROOT="$(dirname "$BENCH")"
 MODEL="${MODEL:-claude-sonnet-5-5}"
 NUDGES="${NUDGES:-3}"
 DEADLINE_MIN="${DEADLINE_MIN:-40}"
-OUT="${OUT:-$BENCH/out/$(date +%Y%m%d-%H%M%S)}"
-TOOLS="Read,Edit,Write,Glob,Grep,Bash(pytest *),Bash(python -m pytest *),Bash(python3 -m pytest *)"
+OUT="${OUT:-${XDG_CACHE_HOME:-$HOME/.cache}/cliffhanger-bench/$(date +%Y%m%d-%H%M%S)}"
+case "$OUT" in "$ROOT"/*) echo "OUT must be outside $ROOT (parent AGENTS.md would leak into the baseline)" >&2; exit 1;; esac
+for d in "$OUT" "$(dirname "$OUT")" "$(dirname "$(dirname "$OUT")")"; do
+  for f in AGENTS.md CLAUDE.md; do [ -e "$d/$f" ] && { echo "found $d/$f above the run directories" >&2; exit 1; }; done
+done
+TOOLS="${TOOLS:-Read,Edit,Write,Glob,Grep,Bash(pytest *),Bash(python -m pytest *),Bash(python3 -m pytest *)}"
 UNSET=(-u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_ENTRYPOINT
        -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_PID -u CLAUDE_EFFORT
        -u CLAUDE_CODE_SESSION_ATTENDED -u AI_AGENT -u CLAUDE_CODE_EXECPATH)
