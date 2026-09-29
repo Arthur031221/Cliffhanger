@@ -1,0 +1,1 @@
+{"hook_event_name": "Stop", "session_id": "demo-3", "stop_hook_active": false, "last_assistant_message": "Code is merged and 31 tests pass.\nBLOCKED: deploy to staging. Need STAGING_TOKEN exported, it is not set here."}
