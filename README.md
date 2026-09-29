@@ -64,8 +64,9 @@ echo '{"session_id":"try","last_assistant_message":"Two of five call sites migra
 bin/cliffhanger stats
 ```
 
-The first command prints a `{"decision": "block", ...}` object naming the pattern it caught. The
-second prints `caught 1 early stop this week in 1 of 1 sessions`.
+The `echo` line prints a `{"decision": "block", ...}` object naming the pattern it caught. On a
+machine with no earlier log, `bin/cliffhanger stats` then prints
+`caught 1 early stop this week in 1 of 1 sessions`.
 
 For unattended runs, put the skill in the system prompt from the first request, which is where the
 guide says this kind of instruction belongs. In our one run with the plugin loaded, the model did not
@@ -150,8 +151,8 @@ Claude Code, `/cliffhanger:stats` runs the same thing.
 | **cliffhanger** | Stop and SubagentStop hook | TaskCreate/TaskUpdate, TodoWrite, Markdown `- [ ]` | `BLOCKED:` / `NEEDS-YOU:` lines | 3 per user turn | SKILL.md, AGENTS.md | [bench/results.md](bench/results.md) | 0 |
 | [`/goal`](https://code.claude.com/docs/en/goal) (built in) | prompt-based Stop hook | no, a small model judges a condition you write | the evaluator can rule the goal impossible | stops after several turns with no tool use | no | no | 1 (Haiku by default) |
 | [claude-nonstop](https://github.com/garetneda-gif/claude-nonstop) | two Stop hooks | TaskCreate/TaskUpdate/TodoWrite | a `STATUS: DONE` report and a deactivate file | 20 by default (opt-in guard) | no | none found | 0 |
-| [no-cliffhanger](https://github.com/waitdeadai/no-cliffhanger) | Stop and SubagentStop hook, bash and jq | no, the last 320 characters of the message | `Status: blocked` endings, explicit y/n questions | not stated | no | none found | 0 |
-| [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) and other Ralph loops | no, an outer loop that restarts `claude` | its own fix plan | an `EXIT_SIGNAL` in the output | rate limit and circuit breaker | yes | none found | a new session per loop |
+| [no-cliffhanger](https://github.com/waitdeadai/no-cliffhanger) | Stop and SubagentStop hook, bash and jq | no, the last 320 characters of the message | `Status: blocked` endings, explicit y/n questions | not stated in its README | no | none found | 0 |
+| [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) and other Ralph loops | no, an outer loop that restarts `claude` | `.ralph/fix_plan.md` | an `EXIT_SIGNAL` in the output | rate limit and circuit breaker | `.ralph/PROMPT.md` | none found | a new session per loop |
 
 `/goal` is the right tool when you can state the end condition ("all tests in test/auth pass"). It is
 per session and you type it each time. cliffhanger is always on, costs no model calls, and reads the
