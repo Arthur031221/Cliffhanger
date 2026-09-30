@@ -234,6 +234,12 @@ enforces it there yet.
 **Privacy.** The hook reads your transcript locally and writes only the fields listed under Files.
 It makes no network calls.
 
+## Related projects
+
+- [shiftgear](https://github.com/Arthur031221/shiftgear): Picks the model and effort level before the agent starts. cliffhanger checks whether the agent actually finished with it. Both are Claude Code skills.
+- [agentleaks](https://github.com/Arthur031221/agentleaks): Another unattended-safe tool, worth pairing with cliffhanger if agentleaks fix runs as part of a longer job.
+- [installwall](https://github.com/Arthur031221/installwall): Guards an install an agent might run mid task. cliffhanger guards against the agent quitting before the task is done.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). New patterns need a real transcript excerpt that must block
