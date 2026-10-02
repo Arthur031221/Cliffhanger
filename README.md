@@ -3,6 +3,8 @@
 A Stop hook and skill for Claude Code that keeps the agent working until every part of the task is
 done or a real blocker is named, and counts every early stop it catches.
 
+![The hook blocking an offer to continue, allowing a BLOCKED: line, then cliffhanger stats](demo/demo.gif)
+
 Sonnet 5.5 ended the turn without running the tests it was asked to run in 6 of 12 multi-step
 tasks. With cliffhanger: 0 of 12, at 4 percent more cost.[^bench] In observe mode the hook flagged
 exactly those 6 stops, and none of the other 42 final messages from the benchmark.[^detector]
@@ -16,8 +18,6 @@ and a counter that tells you how often they happen to you.
 [![ci](https://github.com/Arthur031221/cliffhanger/actions/workflows/ci.yml/badge.svg)](https://github.com/Arthur031221/cliffhanger/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![version 0.1.0](https://img.shields.io/badge/version-0.1.0-informational.svg)](CHANGELOG.md)
-
-![The hook blocking an offer to continue, allowing a BLOCKED: line, then cliffhanger stats](demo/demo.gif)
 
 [^bench]: 12 tasks with 4 to 6 parts each (code, tests, docs, changelog, "run pytest and make sure
     the whole suite passes") on a small WSGI app. `claude -p` with Claude Code 2.1.284,
