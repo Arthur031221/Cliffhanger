@@ -5,6 +5,7 @@ import json
 import threading
 import time
 
+import pytest
 from conftest import hook
 
 
@@ -139,6 +140,25 @@ def test_good_place_to_report_blocks(run_hook):
     msg = "Phase one is complete, which seems like a good stopping point. Here is what changed."
     _, out, log = run_hook({"last_assistant_message": msg})
     assert out["decision"] == "block" and log[-1]["rule"] == "good-place-to-report"
+
+
+def test_traditional_chinese_real_transcript_offer_blocks(run_hook):
+    # Captured from a real Traditional Chinese assistant transcript.
+    msg = "要我接著加 ROI 輪廓、切換受試者、或包成可分享連結,跟我說一聲就好。"
+    _, out, log = run_hook({"last_assistant_message": msg})
+    assert out["decision"] == "block" and log[-1]["rule"] == "offers-to-continue"
+
+
+@pytest.mark.parametrize(("msg", "rule"), [
+    ("下一步是更新文件。", "announces-next-step"),
+    ("要我繼續嗎？", "offers-to-continue"),
+    ("有幾個選擇要你決定。", "decisions-for-user"),
+    ("這是個適合停下的地方。", "good-place-to-report"),
+    ("還沒跑過測試。", "leaves-work-unverified"),
+])
+def test_traditional_chinese_patterns_block(run_hook, msg, rule):
+    _, out, log = run_hook({"last_assistant_message": msg})
+    assert out["decision"] == "block" and log[-1]["rule"] == rule
 
 
 def test_blocker_phrase_suppresses_pattern(run_hook):

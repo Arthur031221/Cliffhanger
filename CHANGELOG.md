@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Detect Traditional Chinese versions of the early-stop patterns when no checklist exists.
+
 ## 0.1.0 (2026-09-30)
 
 - Stop and SubagentStop hook (`hooks/cliffhanger.py`, stdlib only, under 200 lines). Blocks the end

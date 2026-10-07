@@ -322,7 +322,7 @@ Claude Code labels every `decision: "block"` from a Stop hook that way in the tr
 <details>
 <summary><b>Does the pattern matcher support every language?</b></summary>
 
-The regex bank matches English phrasing. The checklist path works in any language.
+The regex bank matches English and Traditional Chinese phrasing. The checklist path works in any language.
 
 </details>
 

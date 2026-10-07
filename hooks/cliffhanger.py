@@ -22,26 +22,33 @@ PATTERNS = [  # (rule, description, regex): the four early stops in Anthropic's 
         r"\bnext steps?\s*(?:is|are|would be|will be|:)|\bnext,? I(?:'ll| will| would| plan to)\b"
         r"|\b(?:then|after that),? I(?:'ll| will)\b|\bwhat(?:'s| is) left\b|\bI(?:'ll| will) (?:now |next |then )?"
         r"(?:continue|proceed|move on|start on|tackle|work on|run|add|write|finish)\b"
+        r"|下一步(?:是|將|會)|接下來(?:我會|將)|我(?:會|將)(?:繼續|接著|開始|處理|執行|補上)|還剩(?:下)?"
         r"|^\W*(?:remaining|still to do|left to do|todo|next steps?)(?: work| items| steps)?\W*$", F)),
     ("offers-to-continue", "an offer to carry on that waits for an answer nobody will give", re.compile(
         r"\b(?:do you )?want me to\b|\bwould you like me to\b|\bshall I\b|\bsay the word\b"
         r"|\bshould I (?:continue|proceed|go ahead|keep going)\b|\bonce you (?:approve|confirm|reply)\b"
         r"|\blet me know (?:if|whether|when) (?:you(?:'d| would)? (?:like|want) me to|I should|to (?:continue|proceed))"
         r"|\bif you(?:'d| would)? (?:like|want|prefer),? I (?:can|could|will|'ll)\b|\bhappy to (?:continue|proceed)\b"
-        r"|\bI can (?:continue|proceed|keep going|finish|go ahead)\b[^.?!\n]*\bif\b", F)),
+        r"|\bI can (?:continue|proceed|keep going|finish|go ahead)\b[^.?!\n]*\bif\b"
+        r"|要我(?:接著|繼續|再)?(?:加|做|處理|完成|繼續)?[^。！？\n]*嗎"
+        r"|如果你想要[^。！？\n]*我可以|跟我說一聲就好", F)),
     ("decisions-for-user", "a list of decisions, none of which blocks the rest of the work", re.compile(
         r"\bdecisions? (?:for you|you(?:'ll)? need to make|needed from you)\b|\bbefore I (?:continue|proceed)\b"
         r"|\b(?:a few|some|two|three|several|couple of) (?:open )?(?:decisions|questions|choices)\b"
         r"|^\W*options?\W*:?\W*$|\bwhich (?:option|approach) (?:do you|would you|should I)\b"
-        r"|\bhow would you like (?:me )?to (?:proceed|handle)\b", F)),
+        r"|\bhow would you like (?:me )?to (?:proceed|handle)\b"
+        r"|(?:有幾個|幾個)選擇要你(?:決定|選)|你需要決定(?:的是)?|^\s*選項\s*[:：]", F)),
     ("good-place-to-report", "a stop to report because a milestone felt like a good place", re.compile(
         r"\bgood (?:stopping|breaking|pausing) (?:point|place)\b|\bnatural (?:stopping|pause|break)"
         r"|\b(?:good|natural|logical) (?:place|point|time) to (?:stop|pause|check in|report)\b"
         r"|\bI'll (?:pause|stop) (?:here|now|for now)\b|\bcheck(?:ing)? in (?:with you|before)\b"
-        r"|\bin (?:the |a )?(?:next|follow-up) (?:turn|session|message)\b", F)),
+        r"|\bin (?:the |a )?(?:next|follow-up) (?:turn|session|message)\b"
+        r"|這是(?:個)?(?:好|適合|自然的)?(?:停下|暫停|報告)(?:的)?(?:點|地方)|我先(?:停|暫停)在這裡"
+        r"|下(?:一|個)回合", F)),
     ("leaves-work-unverified", "a report that the work was never run or tested", re.compile(  # ours, not the guide's
         r"\b(?:haven't|have not|couldn't|could not|didn't|did not) (?:yet )?(?:been able to )?(?:run|execute) "
-        r"(?:the |any )?(?:tests?|pytest|test suite|suite)\b|\bunverified\b|\buntested\b|\bnot (?:yet )?tested\b", F)),
+        r"(?:the |any )?(?:tests?|pytest|test suite|suite)\b|\bunverified\b|\buntested\b|\bnot (?:yet )?tested\b"
+        r"|(?:還)?沒(?:有)?(?:跑|執行|測試)(?:過)?(?:任何)?(?:測試|測試套件)|尚未測試", F)),
 ]
 BLOCKERS = re.compile(
     r"\bneeds? (?:your|you to)\b|\b(?:cannot|can't|unable to) (?:proceed|continue)\b"
