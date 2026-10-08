@@ -1,6 +1,6 @@
 <h1 align="center">
   <img src="assets/logo.svg" width="72" alt=""><br>
-  cliffhanger
+  Cliffhanger
 </h1>
 
 <p align="center">
@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Arthur031221/cliffhanger/stargazers"><img src="https://img.shields.io/github/stars/Arthur031221/cliffhanger?style=social" alt="GitHub stars"></a>
-  <a href="https://github.com/Arthur031221/cliffhanger/actions"><img src="https://github.com/Arthur031221/cliffhanger/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Arthur031221/cliffhanger" alt="License"></a>
+  <a href="https://github.com/Arthur031221/Cliffhanger/stargazers"><img src="https://img.shields.io/github/stars/Arthur031221/Cliffhanger?style=social" alt="GitHub stars"></a>
+  <a href="https://github.com/Arthur031221/Cliffhanger/actions"><img src="https://github.com/Arthur031221/Cliffhanger/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Arthur031221/Cliffhanger" alt="License"></a>
 </p>
 
 <p align="center">
@@ -27,16 +27,16 @@
 > ~~~
 
 <p align="center">
-  <img src="assets/demo.gif" alt="The demo shows the hook blocking an offer to continue, allowing a BLOCKED: line, and reporting cliffhanger stats." width="100%">
+  <img src="assets/demo.gif" alt="The demo shows the hook blocking an offer to continue, allowing a BLOCKED: line, and reporting Cliffhanger stats." width="100%">
 </p>
 
-## Why cliffhanger
+## Why Cliffhanger
 
 Opus 5.5 and Sonnet 5.5 report progress as they work, and some progress messages end the turn. Anthropic's [prompting guide](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5#unattended-agentic-runs) describes four ways this can happen. In an interactive session, someone can type "continue"; in a headless run or overnight job, nobody is there to do it. The report can end with "Want me to continue with the remaining three?" or "Once you approve it, I'll run `python -m pytest -q`."
 
-In a 12-task Sonnet 5.5 benchmark with `Bash(pytest *)` as the only test permission, 6 baseline runs stopped before a green test run. With cliffhanger's blocking hook and skill, none did, at about 4 percent more cost. In observe mode, the detector flagged those same 6 final messages and none of the other 42 messages.
+In a 12-task Sonnet 5.5 benchmark with `Bash(pytest *)` as the only test permission, 6 baseline runs stopped before a green test run. With Cliffhanger's blocking hook and skill, none did, at about 4 percent more cost. In observe mode, the detector flagged those same 6 final messages and none of the other 42 messages.
 
-Every early stop in that benchmark followed a refused command: the allowlist said `pytest *`, the agent tried `python -m pytest`, got refused, and wrapped up. With every test command allowed, neither arm stopped early, and the hook plus skill added about 13 percent to the bill. cliffhanger guards against early stops and counts how often they happen. It does not fix a model that quits at random.
+Every early stop in that benchmark followed a refused command: the allowlist said `pytest *`, the agent tried `python -m pytest`, got refused, and wrapped up. With every test command allowed, neither arm stopped early, and the hook plus skill added about 13 percent to the bill. Cliffhanger guards against early stops and counts how often they happen. It does not fix a model that quits at random.
 
 <details>
 <summary><b>Benchmark scope</b></summary>
@@ -261,7 +261,7 @@ With a pattern match, the reason names the pattern, quotes the matching phrase, 
 <details>
 <summary><b>The four cliffhangers</b></summary>
 
-Anthropic's [Prompting Claude Opus 5.5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5#unattended-agentic-runs) names four ways a model can stop while work is still owed. cliffhanger logs a rule for each:
+Anthropic's [Prompting Claude Opus 5.5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5#unattended-agentic-runs) names four ways a model can stop while work is still owed. Cliffhanger logs a rule for each:
 
 | Pattern | Rule | Better next action |
 |---|---|---|
@@ -277,15 +277,15 @@ The project adds one rule for a report that work was never run or tested: `leave
 <details>
 <summary><b>Comparison with alternatives</b></summary>
 
-| Tool | What it does | Where cliffhanger differs |
+| Tool | What it does | Where Cliffhanger differs |
 |---|---|---|
-| **cliffhanger** | Stop and SubagentStop hook; reads TaskCreate/TaskUpdate, TodoWrite, and Markdown `- [ ]` checklists; `BLOCKED:` / `NEEDS-YOU:` escape; cap of 3 per user turn; ships `SKILL.md` and `AGENTS.md`; benchmark in [bench/results.md](bench/results.md); 0 model calls. | Reads the existing checklist before patterns and includes a pattern for untested work. |
+| **Cliffhanger** | Stop and SubagentStop hook; reads TaskCreate/TaskUpdate, TodoWrite, and Markdown `- [ ]` checklists; `BLOCKED:` / `NEEDS-YOU:` escape; cap of 3 per user turn; ships `SKILL.md` and `AGENTS.md`; benchmark in [bench/results.md](bench/results.md); 0 model calls. | Reads the existing checklist before patterns and includes a pattern for untested work. |
 | [`/goal`](https://code.claude.com/docs/en/goal) (built in) | Prompt-based Stop hook; a small model judges a condition you write; no checklist; evaluator can rule the goal impossible; stops after several turns with no tool use; no shipped instructions or published measurement; 1 model call (Haiku by default). | It is per session and you type it each time. |
-| [claude-nonstop](https://github.com/garetneda-gif/claude-nonstop) | Two Stop hooks; reads TaskCreate/TaskUpdate/TodoWrite; `STATUS: DONE` report and deactivate file; cap 20 by default with an opt-in guard; no shipped instructions; no measurement found; 0 model calls. | Its scripts, checked 2026-09-30, read only task tools and do not wait for the transcript. cliffhanger also reads Markdown checklists and waits for the transcript to catch up. |
+| [claude-nonstop](https://github.com/garetneda-gif/claude-nonstop) | Two Stop hooks; reads TaskCreate/TaskUpdate/TodoWrite; `STATUS: DONE` report and deactivate file; cap 20 by default with an opt-in guard; no shipped instructions; no measurement found; 0 model calls. | Its scripts, checked 2026-09-30, read only task tools and do not wait for the transcript. Cliffhanger also reads Markdown checklists and waits for the transcript to catch up. |
 | [no-cliffhanger](https://github.com/waitdeadai/no-cliffhanger) | Stop and SubagentStop hook using bash and jq; reads only the last 320 message characters, not a checklist; `Status: blocked` endings and explicit yes/no questions; no cap stated in its README; no shipped instructions; no measurement found; 0 model calls. | Reads the task checklist and supports explicit `BLOCKED:` / `NEEDS-YOU:` lines. |
 | [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) and other Ralph loops | Outer loop restarts `claude`; reads `.ralph/fix_plan.md`; uses an `EXIT_SIGNAL`; rate limit and circuit breaker; ships `.ralph/PROMPT.md`; no measurement found; starts a new session per loop. | Reuses the current in-session context instead of restarting the session. |
 
-`/goal` is the right tool when you can state the end condition, such as all tests in test/auth pass. It is per session and you type it each time. cliffhanger is always on, costs no model calls, and reads the checklist the agent already keeps. claude-nonstop is the closest design and reads the same task tools. Its scripts, checked 2026-09-30, read only the task tools, so they see no checklist on a 5.5 model without todo tools and read the transcript without waiting for it to catch up. Ralph loops restart whole sessions, which is heavier and loses in-session context.
+`/goal` is the right tool when you can state the end condition, such as all tests in test/auth pass. It is per session and you type it each time. Cliffhanger is always on, costs no model calls, and reads the checklist the agent already keeps. claude-nonstop is the closest design and reads the same task tools. Its scripts, checked 2026-09-30, read only the task tools, so they see no checklist on a 5.5 model without todo tools and read the transcript without waiting for it to catch up. Ralph loops restart whole sessions, which is heavier and loses in-session context.
 
 </details>
 
@@ -349,13 +349,13 @@ The hook reads the transcript locally and writes only the fields listed in the E
 
 ## Related projects
 
-- [shiftgear](https://github.com/Arthur031221/shiftgear): Picks the model and effort level before the agent starts. cliffhanger checks whether the agent finished with it. Both are Claude Code skills.
-- [agentleaks](https://github.com/Arthur031221/agentleaks): Another unattended-safe tool, worth pairing with cliffhanger if agentleaks fix runs as part of a longer job.
-- [installwall](https://github.com/Arthur031221/installwall): Guards an install an agent might run mid-task. cliffhanger guards against the agent quitting before the task is done.
+- [shiftgear](https://github.com/Arthur031221/shiftgear): Picks the model and effort level before the agent starts. Cliffhanger checks whether the agent finished with it. Both are Claude Code skills.
+- [agentleaks](https://github.com/Arthur031221/agentleaks): Another unattended-safe tool, worth pairing with Cliffhanger if agentleaks fix runs as part of a longer job.
+- [installwall](https://github.com/Arthur031221/installwall): Guards an install an agent might run mid-task. Cliffhanger guards against the agent quitting before the task is done.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [open an issue](https://github.com/Arthur031221/cliffhanger/issues). New patterns need a real transcript excerpt that must block and a real final report that must still pass.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [open an issue](https://github.com/Arthur031221/Cliffhanger/issues). New patterns need a real transcript excerpt that must block and a real final report that must still pass.
 
 ## License
 
