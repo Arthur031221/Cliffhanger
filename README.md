@@ -360,3 +360,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [open an issue](https://github.com/Ar
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Assisted by Claude/Codex.
