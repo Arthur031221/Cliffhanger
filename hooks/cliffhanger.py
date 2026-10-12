@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Stop and SubagentStop hook: block the end of a turn while the agent's checklist has open items,
-or, with no checklist, while its last message is one of the four early stops. Stdlib only. Fails open."""
+"""Stop and SubagentStop hook: detect unfinished checklists and early-stop phrasing. Stdlib only, fail open."""
 from __future__ import annotations
 
 import hashlib
@@ -55,8 +54,7 @@ BLOCKERS = re.compile(
     r"|\bcredentials?\b|\bapi[ _-]?key\b|\baccess token\b|\bpermission (?:denied|to)\b|\bcan(?:not|'t) be undone\b"
     r"|\bwhich one of these\b|\b(?:destructive|irreversible)\b|\bprotected (?:branch|environment)\b"
     r"|\b(?:requires?|needs?) (?:your )?(?:approval|confirmation|sign-?off)\b", F)
-KEYS = ("TaskCreate", "TaskUpdate", "TodoWrite", "Task #", "turnOrigin", "[ ]", "[x]", "[X]")
-
+KEYS = ("TaskCreate", "TaskUpdate", "TodoWrite", "tool_result", "turnOrigin", "[ ]", "[x]", "[X]")
 
 def read_transcript(path, last_msg, wait_ms):
     """Parse the records the checklist needs, after waiting (bounded) for the final message to hit disk."""
@@ -80,40 +78,42 @@ def read_transcript(path, last_msg, wait_ms):
     records = [json.loads(raw[a:b]) for a, b in sorted(spans) if raw[a:b].rstrip().endswith("}")]
     return [r for r in records if isinstance(r, dict) and not r.get("isSidechain")]
 
-
 def markdown_items(text):
     return [(m.group(2), "completed" if m.group(1) in "xX" else "pending") for m in BOX.finditer(text or "")]
 
-
 def checklist(records, last_msg=""):
     """Rebuild the checklist from TaskCreate/TaskUpdate, TodoWrite, or `- [ ]` lines written this turn."""
-    tasks, creates, todo, md, source = {}, {}, None, None, None
+    tasks, calls, todo, md, source = {}, {}, None, None, None
     for rec in records:
         if rec.get("type") == "user" and rec.get("turnOrigin") in ("human", "sdk", "scheduled"):
             md = None  # a new prompt, not a background-task notification: old markdown lists expire
         content = (rec.get("message") or {}).get("content")
         for b in content if isinstance(content, list) else []:
             kind, name, inp = b.get("type"), b.get("name"), b.get("input") or {}
-            if kind == "tool_use" and name == "TodoWrite":
-                todo, source = [(t.get("content", ""), t.get("status", "")) for t in inp.get("todos", [])], "todo"
-            elif kind == "tool_use" and name == "TaskCreate":
-                creates[b.get("id")] = inp.get("subject") or inp.get("description") or "task"
-            elif kind == "tool_use" and name == "TaskUpdate":
-                tid = str(inp.get("taskId"))
-                entry = tasks.setdefault(tid, ["task " + tid, "pending"])
-                entry[0], entry[1], source = inp.get("subject") or entry[0], inp.get("status") or entry[1], "tasks"
-            elif kind == "tool_result" and b.get("tool_use_id") in creates:
-                subject, found = creates.pop(b["tool_use_id"]), re.search(r"Task #(\w+)", json.dumps(b.get("content")))
-                tid = ((rec.get("toolUseResult") or {}).get("task") or {}).get("id") or (found and found.group(1))
-                if not b.get("is_error"):
+            if kind == "tool_use" and name in ("TaskCreate", "TaskUpdate", "TodoWrite"):
+                calls[b.get("id")] = name, inp
+            elif kind == "tool_result" and b.get("tool_use_id") in calls:
+                name, inp = calls.pop(b["tool_use_id"])
+                result = rec.get("toolUseResult") or {}
+                if b.get("is_error") or result.get("success") is False:
+                    continue
+                source = "todo" if name == "TodoWrite" else "tasks"
+                if name == "TodoWrite":
+                    todo = [(t.get("content", ""), t.get("status", "")) for t in inp.get("todos", [])]
+                elif name == "TaskUpdate":
+                    tid = str(inp.get("taskId"))
+                    entry = tasks.setdefault(tid, ["task " + tid, "pending"])
+                    entry[0], entry[1] = inp.get("subject") or entry[0], inp.get("status") or entry[1]
+                else:
+                    found = re.search(r"Task #(\w+)", json.dumps(b.get("content")))
+                    tid = (result.get("task") or {}).get("id") or (found and found.group(1))
+                    subject = inp.get("subject") or inp.get("description") or "task"
                     tasks.setdefault(str(tid or len(tasks) + 1), [subject, "pending"])
-                    source = "tasks"
             elif kind == "text" and rec.get("type") == "assistant" and markdown_items(b.get("text")):
                 md = markdown_items(b.get("text"))
     md = markdown_items(last_msg) or md
     source = source or ("markdown" if md else None)
     return source, {"tasks": [tuple(v) for v in tasks.values()], "todo": todo, "markdown": md, None: []}[source]
-
 
 def decide(payload, items, source, count, max_count):
     """Pure decision function. Returns (action, rule, open_items, matched_text)."""
@@ -133,7 +133,6 @@ def decide(payload, items, source, count, max_count):
             return "block", rule, [], m.group(0).strip()
     return "allow", "no-pattern", [], None
 
-
 def reason(rule, open_items, matched):
     if rule == "open-items":
         shown = "; ".join(t[:80] for t in open_items[:5])
@@ -146,7 +145,6 @@ def reason(rule, open_items, matched):
             "done, end with the final report and no offer. If something only the user can clear is in "
             "the way, write BLOCKED: <what> <what you need> on its own line.")
 
-
 def first_copy(state_dir, digest):  # the plugin and a settings.json install can both fire: first copy decides
     lock, now = state_dir / f"{digest}.lock", time.time()
     try:
@@ -158,7 +156,6 @@ def first_copy(state_dir, digest):  # the plugin and a settings.json install can
     for old in (p for p in state_dir.glob("*.lock") if now - p.stat().st_mtime > 3600):
         old.unlink()
     return True
-
 
 def main():
     payload = json.loads(sys.stdin.read() or "{}")

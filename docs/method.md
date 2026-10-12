@@ -38,8 +38,9 @@ Rebuilt from the transcript on every stop, in the record shapes Claude Code 2.1.
 
 - `TaskCreate` tool calls. The id comes from the tool result's `toolUseResult.task.id`, or from
   `Task #N created` in the result text. Failed creates are ignored.
-- `TaskUpdate` calls with `taskId` and `status`. `deleted` counts as done.
-- The latest `TodoWrite` call's `todos` list, when `CLAUDE_CODE_ENABLE_TASKS=0` selects it.
+- Successful `TaskUpdate` results apply the call's `taskId` and `status`. `deleted` counts as done.
+- The latest successful `TodoWrite` result applies its call's `todos` list, when
+  `CLAUDE_CODE_ENABLE_TASKS=0` selects it.
 - Otherwise the latest Markdown list of `- [ ]` and `- [x]` lines in an assistant message. This
   matters because the task tools are off by default on Opus 5.5 and Sonnet 5.5
   ([tools reference](https://code.claude.com/docs/en/tools-reference#task-tool-availability)).
@@ -52,6 +53,26 @@ still read as open. So the hook first polls the file (every 100 ms, up to `CLIFF
 default 1500) until the last 40 characters of `last_assistant_message` appear in it.
 
 When a checklist exists it is the only signal. The regexes never override it in either direction.
+
+Checklist calls are paired with results by `tool_use_id`. A result with `is_error: true` or
+`toolUseResult.success: false` is ignored. Calls awaiting results do not change the previous
+checklist. This prevents a rejected completion or deletion from hiding an unfinished task, and
+prevents a rejected `TodoWrite` from replacing the previous list.
+
+### Completion evidence boundary
+
+The hook inspects checklist-tool results to reconstruct status. It does not validate Bash or
+other test-command results, and the shipped plugin has no separate test-evidence check. An agent
+can mark the test item complete without running tests and receive `checklist-done`. Running tests
+successfully and then changing code also receives `checklist-done` when the checklist stays done.
+An unchanged passing run does not force a rerun, but that is checklist behavior rather than
+verification of evidence freshness.
+
+A commit SHA cannot identify uncommitted changes. A future evidence check would need the tested
+working-tree contents, including relevant uncommitted code and test inputs, captured at test time.
+It would also need a definition of required test commands and relevant inputs. Comparing those
+contents at stop time could retain a passing run until inputs change. This evidence protocol is
+not implemented by the current Stop and SubagentStop hooks.
 
 ### The regex bank
 

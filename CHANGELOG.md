@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Detect Traditional Chinese versions of the early-stop patterns when no checklist exists.
+- Apply checklist-tool changes only after successful results. Failed or unresolved `TaskUpdate`
+  and `TodoWrite` calls preserve the previous checklist, so unfinished steps remain visible.
+- Document that checklist completion does not verify test runs or detect code changes after tests.
 
 ## 0.1.0 (2026-09-30)
 

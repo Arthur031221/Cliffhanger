@@ -44,6 +44,74 @@ def test_failed_task_create_is_ignored(transcript, run_hook):
     assert out is None and log[-1]["rule"] == "checklist-done"
 
 
+@pytest.mark.parametrize("status", ["completed", "deleted"])
+@pytest.mark.parametrize("failure", ["is_error", "success_false", "missing_result"])
+def test_unsuccessful_task_update_preserves_open_item(transcript, run_hook, status, failure):
+    t = transcript.prompt("Add endpoint, tests and docs")
+    t.task_create("Endpoint", 1).task_create("Tests", 2).task_create("Docs", 3)
+    t.task_update(1, "completed").task_update(3, "completed")
+    t.tool("TaskUpdate", {"taskId": "2", "status": status}, result="Update rejected",
+           is_error=failure == "is_error", tool_use_result={"success": failure != "success_false"})
+    if failure == "missing_result":
+        t.records.pop()
+    msg = "Endpoint and docs complete."
+    t.say(msg)
+    proc, out, log = run_hook({"transcript_path": t.write(), "last_assistant_message": msg})
+    assert proc.returncode == 0
+    assert out is not None and out["decision"] == "block"
+    assert log[-1]["rule"] == "open-items" and log[-1]["open"] == ["Tests"]
+    # A later successful update really completes the same task.
+    t.task_update(2, "completed").say("All three complete.")
+    _, out, log = run_hook({"transcript_path": t.write(), "last_assistant_message": "All three complete."})
+    assert out is None and log[-1]["rule"] == "checklist-done"
+
+
+@pytest.mark.parametrize("failure", ["is_error", "success_false", "missing_result"])
+def test_unsuccessful_todowrite_preserves_previous_list(transcript, run_hook, failure):
+    t = transcript.todo(("Endpoint", "completed"), ("Tests", "pending"), ("Docs", "completed"))
+    t.tool("TodoWrite", {"todos": [{"content": "Endpoint", "status": "completed"}]},
+           result="Update rejected", is_error=failure == "is_error",
+           tool_use_result={"success": failure != "success_false"})
+    if failure == "missing_result":
+        t.records.pop()
+    msg = "Endpoint and docs complete."
+    t.say(msg)
+    _, out, log = run_hook({"transcript_path": t.write(), "last_assistant_message": msg})
+    assert out is not None and out["decision"] == "block"
+    assert log[-1]["open"] == ["Tests"] and log[-1]["source"] == "todo"
+    t.todo(("Endpoint", "completed"), ("Tests", "completed"), ("Docs", "completed"))
+    t.say("All three complete.")
+    _, out, log = run_hook({"transcript_path": t.write(), "last_assistant_message": "All three complete."})
+    assert out is None and log[-1]["rule"] == "checklist-done"
+
+
+@pytest.mark.parametrize("source", ["tasks", "todo", "markdown"])
+def test_multistep_checklist_preserves_each_remaining_item(transcript, run_hook, source):
+    subjects = ["Endpoint", "Validation", "Tests", "Docs", "Changelog", "Run suite"]
+    t = transcript.prompt("Add endpoint, validation, tests, docs, changelog and run the suite")
+    if source == "tasks":
+        for tid, subject in enumerate(subjects, 1):
+            t.task_create(subject, tid)
+    for completed in range(len(subjects) + 1):
+        if source == "tasks" and completed:
+            t.task_update(completed, "completed")
+        items = [(subject, "completed" if i < completed else "pending") for i, subject in enumerate(subjects)]
+        if source == "todo":
+            t.todo(*items)
+        elif source == "markdown":
+            t.say("\n".join(f"- [{'x' if status == 'completed' else ' '}] {subject}" for subject, status in items))
+        msg = f"Progress {completed} of {len(subjects)}."
+        t.say(msg)
+        proc, out, log = run_hook({"transcript_path": t.write(), "last_assistant_message": msg})
+        assert proc.returncode == 0
+        assert log[-1]["open"] == subjects[completed:]
+        assert log[-1]["source"] == source
+        if completed < len(subjects):
+            assert out["decision"] == "block" and log[-1]["rule"] == "open-items"
+        else:
+            assert out is None and log[-1]["rule"] == "checklist-done"
+
+
 def test_todowrite_open_items_block(transcript, run_hook):
     t = transcript.todo(("Add model field", "completed"), ("Migrate data", "in_progress"), ("Update docs", "pending"))
     _, out, log = run_hook({"transcript_path": t.write(), "last_assistant_message": "Field added."})
@@ -303,6 +371,8 @@ def test_task_ids_fall_back_to_result_text():
                                                   "content": "Task #7 created successfully: X"}]}},
         {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t2", "name": "TaskUpdate",
                                                        "input": {"taskId": "7", "status": "completed"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t2",
+                                                  "content": "Updated task #7 status"}]}},
     ]
     assert hook.checklist(records) == ("tasks", [("X", "completed")])
 

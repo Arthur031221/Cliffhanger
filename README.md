@@ -150,11 +150,13 @@ The first matching rule decides what happens:
 <details>
 <summary><b>Checklist and transcript handling</b></summary>
 
-The checklist comes from the transcript: `TaskCreate` and `TaskUpdate` calls, the latest `TodoWrite` list, or the latest Markdown `- [ ]` list the agent wrote in the current user turn. The Markdown fallback matters because Opus 5.5 and Sonnet 5.5 ship without todo tools by default.
+The checklist comes from the transcript: successful `TaskCreate` and `TaskUpdate` calls, the latest successful `TodoWrite` list, or the latest Markdown `- [ ]` list the agent wrote in the current user turn. Failed calls and calls awaiting a result keep the previous checklist. The Markdown fallback matters because Opus 5.5 and Sonnet 5.5 ship without todo tools by default.
 
 Claude Code writes the transcript asynchronously. Before deciding, the hook waits up to 1.5 seconds for `last_assistant_message` to reach the file. Without that wait, an item ticked in the final message could still look open.
 
 When a checklist exists it takes priority over regexes. For example, "All done. Want me to also add CI?" is allowed after a finished checklist, so the hook does not add scope.
+
+Checklist status is an agent's claim, not test evidence. The hook checks checklist-tool results, but does not check test-command results or record the code that was tested. A test item marked complete without running the suite can pass this check, as can a passing run followed by code changes. The shipped plugin has no separate check for those cases.
 
 </details>
 
